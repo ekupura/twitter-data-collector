@@ -105,9 +105,14 @@ class Collector:
             t.start()
             self.threads.append(t)
 
+    def screenNameToID(self, screen_name):
+        with APIManager() as am:
+            _id = am.api.get_user(screen_name).id_str
+            return _id
+
     # Please override into your inherited class
     def run(self):
-        self.user_id_queue.put(self.root_name)
+        self.user_id_queue.put(self.screenNameToID(self.root_name))
         self.configureThreads()
         self.user_id_queue.join()
 

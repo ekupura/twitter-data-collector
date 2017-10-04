@@ -31,7 +31,7 @@ class FollowerCollector(Collector):
 
     def run(self):
 
-        self.user_id_queue.put(self.root_name)
+        self.user_id_queue.put(self.screenNameToID(self.root_name))
         self.configureThreads()
         for roop in range(2):
             self.logger.info('Phase:%d',roop)
