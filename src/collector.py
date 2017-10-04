@@ -7,6 +7,7 @@ import threading
 from queue import Queue
 import logging
 import logging.config
+import pymysql
 
 
 class APIManager:
@@ -26,7 +27,7 @@ class APIManager:
 
 class Collector:
     def __init__(self):
-        self.thread_num = 8
+        self.thread_num = 4
         self.user_id_queue = Queue()
         self.root_name = 'in9b_09'
         with open("./config/logging.yml","r") as f:
@@ -73,11 +74,12 @@ class Collector:
         self.logger.debug(thread_id+'Data was successfully inserted into the database!')
 
     # Please override into your inherited class
-    def additionalAction(self, datum):
+    def additionalAction(self, datum, thread_id):
         pass
 
     def workerToGetData(self): 
         db_connector = db.DB()
+
         thread_id = '[' + str(threading.get_ident()) + '] '
         while True:
             user_id = self.user_id_queue.get()
@@ -87,13 +89,16 @@ class Collector:
             try:
                 for datum in data:
                     if self.requirement(datum):
-                        self.additionalAction(datum)
+                        self.additionalAction(datum, thread_id)
                         self.setDataToDB(db_connector, datum, thread_id)
                 self.logger.debug(thread_id+"Task Done!")
 
             except pymysql.err.OperationalError as err:
                 self.logger.error(thread_id+'{0}'.format(err))
-                
+
+            except pymysql.exceptions.Warning:
+                pass
+
             finally :
                 self.user_id_queue.task_done()
 

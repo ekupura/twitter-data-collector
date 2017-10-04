@@ -1,6 +1,7 @@
 from collector import Collector
 from queue import Queue
 import logging
+import pymysql
 
 class FollowerCollector(Collector):
     def __init__(self):
@@ -26,8 +27,10 @@ class FollowerCollector(Collector):
         db_connector.insertUserInfomation(info, 'users')
         self.logger.debug(thread_id+'Data was successfully inserted into the database!')
 
-    def additionalAction(self, datum):
+    def additionalAction(self, datum, thread_id):
         self.next_user_id.append(datum.id_str)
+        self.logger.debug(thread_id+'qsize:{0}'.format(self.user_id_queue.qsize()))
+
 
     def run(self):
 
