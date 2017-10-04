@@ -5,7 +5,7 @@ from pprint import pprint
 import tweepy
 from queue import Queue 
 
-def generateAPIs():
+def generateAuth():
     config = {}
     with open("./config/config.yml","r") as f:
         config = yaml.load(f)
@@ -20,10 +20,17 @@ def generateAPIs():
             access_token.append(row[0])
             access_token_secret.append(row[1])
 
-    apis = Queue()
+    auth_list = []
     for at, ats in zip(access_token, access_token_secret) :
         auth = tweepy.OAuthHandler(consumer_key, consumer_secret)
         auth.set_access_token(at, ats)
+        auth_list.append(auth)
+
+    return auth_list
+
+def generateAPIs():
+    apis = Queue()
+    for auth in generateAuth():
         apis.put(tweepy.API(auth, wait_on_rate_limit = False))
 
     return apis
