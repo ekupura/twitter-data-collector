@@ -26,10 +26,45 @@ class DB:
                 cursor.execute(sql,info)
                 self.connection.commit()
 
-    def makeUsersTable(self, table_name = 'users'):
-        with self.connection.cursor() as cursor:
-            sql = "CREATE TABLE " + table_name + "(id varchar(64) PRIMARY KEY ,screen_name varchar(256), followers_count int, friends_count int, statuses_count int, description varchar(2048), url varchar(256), nit int) CHARACTER SET = 'utf8mb4'"
-            cursor.execute(sql)
-            self.connection.commit()
+    def insertUserTweet(self, info, table_name = 'tweets'):
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            with self.connection.cursor() as cursor:
+                sql = 'INSERT IGNORE INTO '+ table_name + ' VALUES (%s, %s, %s)'
+                cursor.execute(sql,info)
+                self.connection.commit()
+
+    def getUsersID(self, table_name = 'users'):
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            with self.connection.cursor() as cursor:
+                sql = 'SELECT id FROM ' + table_name + ';'
+                cursor.execute(sql)
+                return cursor.fetchall()
+
+    def getUsersName(self, table_name = 'users', where_column=None):
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            with self.connection.cursor() as cursor:
+                sql = 'SELECT screen_name FROM ' + table_name
+                if not where_column is None:
+                    sql += ' WHERE ' + where_column + ' = 0'
+                cursor.execute(sql)
+                return [x["screen_name"] for x in cursor.fetchall()]
+
+    def updateColumn(self, _id, value, column_name, table_name = 'users'):
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            with self.connection.cursor() as cursor:
+                sql = 'UPDATE ' + table_name 
+                sql += ' SET ' + column_name
+                sql += ' = %s WHERE id = %s' 
+                cursor.execute(sql,(value, _id))
+                self.connection.commit()
+
+
+    def __del__(self):
+        self.connection.close()
+
 
 

@@ -73,34 +73,42 @@ class Collector:
         db_connector.insertUserInfomation(info, 'collector_test')
         self.logger.debug(thread_id+'Data was successfully inserted into the database!')
 
+    def setMarkToDB(self, db_connector, user_id):
+        pass
+
     # Please override into your inherited class
     def additionalAction(self, datum, thread_id):
         pass
 
-    def workerToGetData(self): 
-        db_connector = db.DB()
+    def getSingleUserData(self, thread_id='', user_id=None):
+        if user_id is None:
+            user_id = self.user_id_queue.get()
+            self.logger.info(thread_id+"Qsize:{0}".format(self.user_id_queue.qsize()))
 
+        self.logger.debug(thread_id+"Attempt to get data...")
+        data = self.getData(user_id)
+        self.logger.debug(thread_id+"[Twitter] OK!")
+        try:
+            db_connector = db.DB()
+            for datum in data:
+                if self.requirement(datum):
+                    self.additionalAction(datum, thread_id)
+                    self.setDataToDB(db_connector, datum, thread_id)
+
+            self.setMarkToDB(db_connector, self.screenNameToID(user_id))
+            self.logger.debug(thread_id+"Task Done!")
+
+        except pymysql.err.OperationalError as err:
+            self.logger.error(thread_id+'{0}'.format(err))
+            self.getSingleUserData(thread_id,user_id=user_id)
+
+        finally :
+            self.user_id_queue.task_done()
+
+    def workerToGetData(self): 
         thread_id = '[' + str(threading.get_ident()) + '] '
         while True:
-            user_id = self.user_id_queue.get()
-            self.logger.debug(thread_id+"Attempt to get data...")
-            data = self.getData(user_id)
-            self.logger.debug(thread_id+"[Twitter] OK!")
-            try:
-                for datum in data:
-                    if self.requirement(datum):
-                        self.additionalAction(datum, thread_id)
-                        self.setDataToDB(db_connector, datum, thread_id)
-                self.logger.debug(thread_id+"Task Done!")
-
-            except pymysql.err.OperationalError as err:
-                self.logger.error(thread_id+'{0}'.format(err))
-
-            except pymysql.exceptions.Warning:
-                pass
-
-            finally :
-                self.user_id_queue.task_done()
+            self.getSingleUserData(thread_id)
 
     def configureThreads(self):
         self.threads = []
@@ -111,9 +119,13 @@ class Collector:
             self.threads.append(t)
 
     def screenNameToID(self, screen_name):
-        with APIManager() as am:
-            _id = am.api.get_user(screen_name).id_str
-            return _id
+        _id = ''
+        try:
+            with APIManager() as am:
+                _id = am.api.get_user(screen_name).id_str
+        except tweepy.error.TweepError :
+            self.screenNameToID(screen_name)
+        return _id
 
     # Please override into your inherited class
     def run(self):
