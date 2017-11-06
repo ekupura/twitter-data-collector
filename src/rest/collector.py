@@ -1,3 +1,6 @@
+import sys
+sys.path.append('../lib')
+from pathlib import Path
 import api
 import db
 import yaml
@@ -30,7 +33,7 @@ class Collector:
         self.thread_num = 4
         self.user_id_queue = Queue()
         self.root_name = 'in9b_09'
-        with open("./config/logging.yml","r") as f:
+        with open("../lib/config/logging.yml","r") as f:
             logging.config.dictConfig(yaml.load(f))
         self.logger = logging.getLogger('collector')
 
@@ -38,7 +41,7 @@ class Collector:
     def requirement(self, user_data):
         return True
 
-    def collect(self, tweepy_cursor, cur, data):
+    def collect(self, tweepy_cursor, cur, data, thread_id):
         now_cursor = cur
         try:
             for d in tweepy_cursor:
@@ -47,11 +50,11 @@ class Collector:
             return (True, -1)
 
         except tweepy.error.TweepError :
-            self.logger.warning("API Limited. Change api.")
+            self.logger.warning(thread_id + "API Limited. Change api.")
             return (False, now_cursor)
 
     # Please override into your inherited class
-    def getData(self, user_id):
+    def getData(self, user_id, thread_id):
         cur = -1
         data = []
         while True:
@@ -60,7 +63,7 @@ class Collector:
                                               id=user_id,
                                               count=200,
                                               cursor=cur).items()
-                result = self.collect(tweepy_cursor, cur, data)
+                result = self.collect(tweepy_cursor, cur, data, thread_id)
                 if result[0]:
                     return data
                 cur = result[1]
@@ -86,7 +89,7 @@ class Collector:
             self.logger.info(thread_id+"Qsize:{0}".format(self.user_id_queue.qsize()))
 
         self.logger.debug(thread_id+"Attempt to get data...")
-        data = self.getData(user_id)
+        data = self.getData(user_id, thread_id)
         self.logger.debug(thread_id+"[Twitter] OK!")
         try:
             db_connector = db.DB()
@@ -95,12 +98,12 @@ class Collector:
                     self.additionalAction(datum, thread_id)
                     self.setDataToDB(db_connector, datum, thread_id)
 
-            self.setMarkToDB(db_connector, self.screenNameToID(user_id))
+            self.setMarkToDB(db_connector, user_id)
             self.logger.debug(thread_id+"Task Done!")
 
         except pymysql.err.OperationalError as err:
             self.logger.error(thread_id+'{0}'.format(err))
-            self.getSingleUserData(thread_id,user_id=user_id)
+            self.user_id_queue.put(user_id)
 
         finally :
             self.user_id_queue.task_done()
@@ -124,7 +127,7 @@ class Collector:
             with APIManager() as am:
                 _id = am.api.get_user(screen_name).id_str
         except tweepy.error.TweepError :
-            self.screenNameToID(screen_name)
+            pass
         return _id
 
     # Please override into your inherited class

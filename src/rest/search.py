@@ -15,7 +15,7 @@ import time
 
 
 
-class TweetCollector(Collector):
+class SearchCollector(Collector):
     def __init__(self):
         super().__init__()
         db_connector = db.DB()
@@ -26,48 +26,43 @@ class TweetCollector(Collector):
         self.logger = logging.getLogger('collector.search')
         self.keyword = ["高専", "procon", "roboron", "プロコン", "ロボコン"]
 
-    def collect(self, tweepy_cursor, cur, data):
-        now_cursor = cur
-        try:
-            for d in tweepy_cursor:
-                data.append(d)
-                now_cursor = tweepy_cursor.page_iterator.index
-            return (True, -1)
-
-        except tweepy.error.TweepError as err:
-            self.logger.warning(err)
-            time.sleep(10)
-            return (False, now_cursor)
-
     def requirement(self, data):
         if data.text.find('RT') == 0:
             return False
         return True
 
-    def getData(self, user_id):
-        cur = -1
+    def collect(self, api, query, page, data):
+        while page < 100:
+            try:
+                d = am.api.search(q=query, count=100, page = page).items()
+                page += 1
+                data.append(d)
+
+            except tweepy.error.TweepError as err:
+                self.logger.warning(err)
+                return page
+
+
+    def getData(self, user_id, thread_id):
+        page = 0
         data = []
-        query = user_id + ' AND ' + ' OR '.join(self.keyword),
-        while True:
+        query = user_id + ' AND ' + ' OR '.join(self.keyword)
+        while page < 100:
             with APIManager() as am:
-                tweepy_cursor = tweepy.Cursor(am.api.search,
-                                              q=query,
-                                              count=1).items()
-                result = self.collect(tweepy_cursor, cur, data)
-                if result[0]:
-                    return data
+                page = self.collect(tweepy_cursor, am, query, page, data)
+        return data
 
     def setDataToDB(self, db_connector, data, thread_id = ''):
         info = (data.id_str, data.user.id_str, data.text)
         db_connector.insertUserTweet(info, 'search')
 
     def setMarkToDB(self, db_connector, user_id):
-        db_connector.updateColumn(user_id, 1, 'search')
+        db_connector.updateColumn(user_id, 1, 'search', name=True)
 
     def run(self):
         self.configureThreads()
         self.user_id_queue.join()
 
 if __name__ == '__main__':
-    i = TweetCollector()
+    i = SearchCollector()
     i.run()

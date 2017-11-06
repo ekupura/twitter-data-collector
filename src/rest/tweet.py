@@ -11,11 +11,12 @@ import pymysql
 from collector import Collector
 from collector import APIManager
 import pprint
+import time
 
 class TweetCollector(Collector):
-    keyword = ["高専", "procon", "roboron", "プロコン", "ロボコン"]
     def __init__(self):
         super().__init__()
+        self.thread_num = 8
         db_connector = db.DB()
         id_list = db_connector.getUsersID()
         self.user_id_queue = Queue()
@@ -23,25 +24,27 @@ class TweetCollector(Collector):
             self.user_id_queue.put(_id["id"])
         self.logger = logging.getLogger('collector.tweet')
 
-    def collect(self, tweepy_cursor, cur, data):
+    def collect(self, tweepy_cursor, cur, data, thread_id):
         now_cursor = cur
         try:
             for d in tweepy_cursor:
                 data.append(d)
                 now_cursor = tweepy_cursor.page_iterator.index
-                return (True, -1)
             return (True, -1)
 
-        except tweepy.error.TweepError :
-            self.logger.warning("API Limited. Change api.")
-            return (False, now_cursor)
+        except tweepy.error.TweepError as err:
+            self.logger.warning(thread_id + err.reason)
+            if err.reason == 'Twitter error response: status code = 401':
+                return (True, -1)
+            else:
+                return (False, now_cursor)
 
     def requirement(self, data):
         if data.text.find('RT') == 0:
             return False
         return True
 
-    def getData(self, user_id):
+    def getData(self, user_id, thread_id):
         cur = -1
         data = []
         while True:
@@ -50,17 +53,17 @@ class TweetCollector(Collector):
                                               id=user_id,
                                               count=200,
                                               page=cur).items()
-                result = self.collect(tweepy_cursor, cur, data)
+                result = self.collect(tweepy_cursor, cur, data, thread_id)
                 if result[0]:
                     return data
                 cur = result[1]
 
     def setDataToDB(self, db_connector, data, thread_id = ''):
         info = (data.id_str, data.user.id_str, data.text)
-#        self.logger.debug(thread_id+'Attempt to set data into the database...')
-        self.logger.debug(thread_id+"id:"+data.user.screen_name)
         db_connector.insertUserTweet(info, 'tweets')
-#        self.logger.debug(thread_id+'Data was successfully inserted into the database!')
+
+    def setMarkToDB(self, db_connector, user_id):
+        db_connector.updateColumn(user_id, 1, 'tweet', name=False)
 
 if __name__ == '__main__':
     i = TweetCollector()

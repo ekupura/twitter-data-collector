@@ -52,13 +52,19 @@ class DB:
                 cursor.execute(sql)
                 return [x["screen_name"] for x in cursor.fetchall()]
 
-    def updateColumn(self, _id, value, column_name, table_name = 'users'):
+    def updateColumn(self, _id, value, column_name, table_name = 'users', name = False):
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
             with self.connection.cursor() as cursor:
+                if name == True:
+                    sql = 'SELECT id'
+                    sql += ' FROM ' + table_name
+                    sql += ' WHERE screen_name = %s'
+                    cursor.execute(sql,(screen_name))
+                    _id = [x["id"] for x in cursor.fetchall()]
                 sql = 'UPDATE ' + table_name 
                 sql += ' SET ' + column_name
-                sql += ' = %s WHERE id = %s' 
+                sql += ' = %s WHERE id = %s'
                 cursor.execute(sql,(value, _id))
                 self.connection.commit()
 
