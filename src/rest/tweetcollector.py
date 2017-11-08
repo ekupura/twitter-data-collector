@@ -82,14 +82,15 @@ class TweetCollectorByThreading(TweetCollector):
             connector.connection.commit()
 
     def worker(self):
-        unique_user_id = self.users_id_queue.get()
-        raw_info = self.collectTweets(unique_user_id)
-        for i in raw_info:
-            self.setTweetInfoToDB(i)
-        self.users_id_queue.task_done()
-        now_size = self.users_id_queue.qsize()
-        progress_rate = round((self.max_size - now_size) / self.max_size, 4)
-        self.logger.info("Progress rate:{0}%".format(progress_rate))
+        while True:
+            unique_user_id = self.users_id_queue.get()
+            raw_info = self.collectTweets(unique_user_id)
+            for i in raw_info:
+                self.setTweetInfoToDB(i)
+            self.users_id_queue.task_done()
+            now_size = self.users_id_queue.qsize()
+            progress_rate = round((self.max_size - now_size) / self.max_size, 4)
+            self.logger.info("Progress rate:{0}%".format(progress_rate))
 
     def configureThreads(self):
         self.threads = []
