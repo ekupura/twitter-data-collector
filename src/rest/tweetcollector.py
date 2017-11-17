@@ -9,6 +9,7 @@ import logging
 import logging.config
 from threading import Thread, Lock
 import threading
+import time
 
 class TweetCollector:
     def __init__(self, the_number_of_tweets):
@@ -68,16 +69,20 @@ class TweetCollectorByThreading(TweetCollector):
         self.logger = logging.getLogger('TweetCollector.ByThreading')
 
     def setTweetInfoToDB(self,raw_info):
-        info = (raw_info.id_str, raw_info.user.id_str, raw_info.created_at, raw_info.text)
+        info = [[i.id_str, i.user.id_str, i.created_at, i.text] for i in raw_info]
         value = ' (id, user_id, time, tweet) '
         sql = 'INSERT IGNORE INTO ' + self.output_table_name + value + 'VALUES '
         sql += '(%s, %s, %s, %s)'
-        check_sql = 'UPDATE ' + self.input_table_name + ' SET collect_tweet = true '
-        check_sql += 'WHERE id = ' + raw_info.user.id_str
         connector = db.DB()
         with connector.connection.cursor() as cursor:
-            cursor.execute(sql, info)
+            cursor.executemany(sql, info)
             connector.connection.commit()
+
+    def checkToDB(self,unique_user_id):
+        check_sql = 'UPDATE ' + self.input_table_name + ' SET collect_tweet = true '
+        check_sql += 'WHERE id = ' + unique_user_id
+        connector = db.DB()
+        with connector.connection.cursor() as cursor:
             cursor.execute(check_sql)
             connector.connection.commit()
 
@@ -85,8 +90,8 @@ class TweetCollectorByThreading(TweetCollector):
         while True:
             unique_user_id = self.users_id_queue.get()
             raw_info = self.collectTweets(unique_user_id)
-            for i in raw_info:
-                self.setTweetInfoToDB(i)
+            self.setTweetInfoToDB(raw_info)
+            self.checkToDB(unique_user_id)
             self.users_id_queue.task_done()
             now_size = self.users_id_queue.qsize()
             progress_rate = round((self.max_size - now_size) / self.max_size, 4)
@@ -105,5 +110,5 @@ class TweetCollectorByThreading(TweetCollector):
         self.users_id_queue.join()
                     
 if __name__ == '__main__':
-    tc = TweetCollectorByThreading(100, "random_users", "random_tweets")
+    tc = TweetCollectorByThreading(100000, "ob_users", "ob_tweets")
     tc.run()
